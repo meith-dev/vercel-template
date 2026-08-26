@@ -2,7 +2,7 @@
 
 A forum, built on [Meith](https://github.com/meith-dev/meith), running as Vercel functions.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fmeith-dev%2Fvercel-template&project-name=meith-board&repository-name=meith-board&env=AUTH_SECRET%2CCRON_SECRET&envDescription=Two+secrets%2C+generated+rather+than+chosen+%E2%80%94+32+characters+or+more+each.+Everything+else+the+board+reads+from+the+database%2C+cache+and+blob+store+this+form+links.&envLink=https%3A%2F%2Fgithub.com%2Fmeith-dev%2Fvercel-template%2Fblob%2Fmain%2F.env.example&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22upstash%22%2C%22productSlug%22%3A%22upstash-kv%22%2C%22protocol%22%3A%22storage%22%7D%2C%7B%22type%22%3A%22blob%22%7D%5D&skippable-integrations=1)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fmeith-dev%2Fvercel-template&project-name=meith-board&repository-name=meith-board&env=AUTH_SECRET%2CCRON_SECRET&envDescription=Two+secrets%2C+generated+rather+than+chosen+%E2%80%94+32+characters+or+more+each.+Everything+else+the+board+reads+from+the+database%2C+cache%2C+blob+store+and+mail+provider+this+form+links.&envLink=https%3A%2F%2Fgithub.com%2Fmeith-dev%2Fvercel-template%2Fblob%2Fmain%2F.env.example&products=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22upstash%22%2C%22productSlug%22%3A%22upstash-kv%22%2C%22protocol%22%3A%22storage%22%7D%2C%7B%22type%22%3A%22blob%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22resend%22%2C%22productSlug%22%3A%22resend-email%22%2C%22protocol%22%3A%22messaging%22%7D%5D&skippable-integrations=1)
 
 ## What the button provisions
 
@@ -19,18 +19,19 @@ A forum, built on [Meith](https://github.com/meith-dev/meith), running as Vercel
   Vercel's SDK, which authenticates with the deployment's own OIDC identity, so
   there is no token to copy. This is what used to be four hand-typed `S3_*`
   secrets.
+- **A Resend mail account**, attached the same way, which publishes
+  `RESEND_API_KEY`. The board reads that name directly: its mail driver already
+  speaks Resend's request shape, so there is nothing to adapt.
 - **A Vercel project** carrying `vercel.json` — the build command
   `community migrate && forum-web build --at-root`,
   which applies the schema before it builds, materializes the board's app at
   the project root so the artefact lands where Vercel reads it, and the cron
   entry that drives the tick.
 
-**Mail is the one thing the button does not set up**, and it takes one click
-after the deploy — see *Mail, in one click* below. That is also where the
-address the board sends from goes: it has to be at a domain your provider has
-verified, which cannot be true of any domain before a provider exists. The
-board boots and runs without mail, and delivers nothing, silently, until it is
-done.
+**Mail needs one thing after the deploy**: the address the board sends from.
+It has to be at a domain Resend has verified, and no form can ask for that
+before the account exists — see *Mail, after the deploy* below. The board boots
+and runs without it, and delivers nothing, silently, until it is done.
 
 ## What to type into the deploy form
 
@@ -85,26 +86,22 @@ Vercel* below for why that matters — set `FILESTORE_DRIVER=s3` and add
 project's environment settings, with `S3_ENDPOINT` for a bucket that is not AWS
 (`S3_REGION=auto` for R2). The same board runs either way.
 
-## Mail, in one click
+## Mail, after the deploy
 
 A board that cannot send mail cannot reset a password, so do this before you
-invite anybody.
+invite anybody. The deploy form already added Resend and published its key; two
+steps remain, and neither could have been answered on the form.
 
-1. Open your project on Vercel, go to **Storage → Marketplace** (or
-   **Integrations**), and add **Resend**. It creates a Resend account linked to
-   the project and connects your sending domain.
-2. Verify that domain in the Resend dashboard if you have not already. Resend
-   refuses to send from an address at a domain it has not verified.
-3. Add `MAIL_FROM` to the project's environment settings — an address at that
-   verified domain, and the only mail value you ever type. The deploy form does
-   not ask for it, because a sender address is not something you can know
-   before there is a provider to verify it.
-4. Redeploy, or let the next push redeploy.
+1. Verify your sending domain in the Resend dashboard if you have not already.
+   Resend refuses to send from an address at a domain it has not verified.
+2. Add `MAIL_FROM` to the project's environment settings — an address at that
+   verified domain, and the only mail value you ever type.
+3. Redeploy, or let the next push redeploy.
 
-That is all. The integration publishes its key into the project as
-`RESEND_API_KEY`, and the board reads that name: with it set, and `MAIL_FROM`
-beside it, mail sends over Resend's HTTPS API with nothing further to
-configure.
+That is all. The integration published its key into the project as
+`RESEND_API_KEY` when you deployed, and the board reads that name: with it set,
+and `MAIL_FROM` beside it, mail sends over Resend's HTTPS API with nothing
+further to configure.
 
 The board is not tied to Resend. Its mail driver is a plain JSON-over-HTTPS
 sender that posts `{from, to, subject, text, html, reply_to}` with a bearer
@@ -132,21 +129,29 @@ walks through.
 
 ## The tick
 
-`vercel.json` asks Vercel to call `/api/system/tick` on `* * * * *`. That
+`vercel.json` asks Vercel to call `/api/system/tick` on `0 3 * * *`. That
 route is how bans expire, digests send, mail leaves the outbox and the queue
 drains; nothing here runs it on its own, because there is no worker process on
 a function platform. Two things about it are worth knowing **before** you
 deploy rather than after:
 
-- **A per-minute schedule needs a paid plan.** Hobby allows a couple of cron
-  jobs and runs each of them roughly once a day, at an hour Vercel chooses;
-  only paid plans accept an arbitrary cron expression. A board ticking daily
-  still loses nothing — tasks are written so a missed run delays work rather
-  than dropping it — but "as it happens" notifications become a daily digest in
-  all but name. To keep a minute-by-minute tick on Hobby, drive
-  `/api/system/tick` from something else that can call a URL on a schedule — a
-  GitHub Actions workflow, a systemd timer, an uptime pinger — presenting
-  `TICK_SECRET` instead.
+- **This ships a daily schedule, because Hobby refuses anything faster.** A
+  Hobby plan rejects a cron expression that would run more than once a day —
+  the deployment fails outright rather than being slowed down — so
+  `vercel.json` carries `0 3 * * *` and deploys anywhere. On a
+  paid plan, edit it to `* * * * *` and the board ticks every minute.
+
+  A daily tick loses nothing permanently: tasks are written so a missed run
+  delays work rather than dropping it, and a password reset is sent as the
+  request is handled rather than waiting for a tick. What it does delay is
+  everything the tick drives — a new post is not findable in search, and a
+  notification is not sent, until the next run.
+
+  **To keep a fast tick without paying**, drive `/api/system/tick` from anything
+  that can call a URL on a schedule — a GitHub Actions workflow, a systemd
+  timer, an uptime pinger — presenting `TICK_SECRET` instead of
+  `CRON_SECRET`. The endpoint accepts either, so the Vercel cron and an
+  outside scheduler can both drive it.
 - **`maxDuration = 300` is validated when the project builds, not when the
   function runs.** A plan that does not allow 300 seconds therefore **fails the
   deployment** rather than clamping the request. With Fluid Compute — the
